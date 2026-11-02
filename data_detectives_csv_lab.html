@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Data Detectives — CSV Lab</title>
+<style>
+:root{font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#20242a;background:#f4f6f8}
+body{margin:0}header{background:#202b3b;color:white;padding:22px max(18px,calc((100% - 1180px)/2))}
+h1{margin:0 0 5px;font-size:1.6rem}header p{margin:0;color:#d7e0eb}
+main{max-width:1180px;margin:22px auto;padding:0 16px}.panel{background:white;border:1px solid #dce2e8;border-radius:12px;padding:16px;margin:14px 0;box-shadow:0 2px 8px #14203308}
+h2{font-size:1.1rem;margin:0 0 12px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}button,.btn{border:0;border-radius:8px;padding:9px 13px;background:#245da8;color:white;cursor:pointer;font:inherit}button.secondary{background:#e8edf3;color:#233246}button.danger{background:#a93232}button:disabled{opacity:.45;cursor:not-allowed}input,select,textarea{font:inherit;border:1px solid #cbd4de;border-radius:7px;padding:8px;background:white;max-width:100%}input[type=file]{max-width:100%}label{display:inline-flex;gap:6px;align-items:center}small,.muted{color:#667382}.scroll{overflow:auto;max-height:430px;border:1px solid #e3e8ee;border-radius:8px}table{border-collapse:collapse;width:100%;font-size:.9rem}th,td{padding:8px 10px;border-bottom:1px solid #e6ebf0;text-align:left;vertical-align:top;white-space:pre-wrap;max-width:360px}th{position:sticky;top:0;background:#edf2f7;z-index:1}td input{width:100%;min-width:100px;box-sizing:border-box}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.stat{background:#f4f7fa;border-radius:8px;padding:10px}.stat b{display:block;font-size:1.15rem}.stat span{font-size:.8rem;color:#657282}.warning{background:#fff6df;border:1px solid #f1d58b;padding:10px;border-radius:8px}.status{margin-left:auto;color:#657282;font-size:.9rem}canvas{width:100%;max-width:760px;height:260px;border:1px solid #e3e8ee;border-radius:8px}.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>Data Detectives — CSV Lab</h1><p>Reusable CSV review, cleaning, descriptive statistics, outliers, and exports. Original upload stays unchanged.</p></header>
+<main>
+<section class="panel">
+<h2>1. Load data</h2><div class="row"><input id="file" type="file" accept=".csv,text/csv"><button id="sample" class="secondary">Load small demo CSV</button><button id="reset" class="secondary" disabled>Reset to original</button><span id="status" class="status">No file loaded</span></div>
+<p class="muted">CSV parser supports quoted fields, commas, and line breaks inside quoted cells. Files are processed locally in this browser.</p>
+<div id="metadata" class="muted"></div>
+</section>
+<section class="panel">
+<h2>2. Explore records</h2><div class="row"><input id="search" placeholder="Search all fields…" disabled><select id="filterCol" disabled><option value="">Filter column…</option></select><input id="filterVal" placeholder="contains…" disabled><select id="sortCol" disabled><option value="">Sort column…</option></select><select id="sortDir" disabled><option value="asc">Ascending</option><option value="desc">Descending</option></select><button id="clearFilter" class="secondary" disabled>Clear</button></div>
+<div id="table" class="scroll" style="margin-top:12px">Upload a CSV to display records.</div><p id="rowInfo" class="muted"></p>
+</section>
+<section class="panel">
+<h2>3. Data quality and cleaning</h2><div class="row"><button id="scan" disabled>Scan quality</button><button id="dedupe" class="secondary" disabled>Remove exact duplicate rows</button><button id="fill" class="secondary" disabled>Fill blank numeric cells with column median</button><button id="logExport" class="secondary" disabled>Export change log</button></div>
+<div id="quality" style="margin-top:12px" class="muted">Load data, then scan.</div>
+<p class="muted">Automatic rules are suggestions, not proof of the correct value. Review the preview and change log; unresolved ID conflicts or ambiguous values should be documented rather than guessed.</p>
+</section>
+<section class="panel">
+<h2>4. Descriptive statistics</h2><div class="row"><label>Numeric column <select id="numCol" disabled></select></label><button id="calc" disabled>Calculate</button></div><div id="stats" class="stats" style="margin-top:12px"></div>
+<div style="margin-top:12px"><canvas id="chart" width="900" height="300" aria-label="Histogram of selected numeric column"></canvas><p class="muted">Histogram uses the selected column's numeric values. Outlier fences use inclusive quartiles (median of each half, including the median in both halves when n is odd).</p></div>
+<div id="outliers"></div>
+</section>
+<section class="panel">
+<h2>5. Manual cell edit</h2><div class="row"><label>Row (1-based data row) <input id="editRow" type="number" min="1" style="width:100px"></label><label>Column <select id="editCol" disabled></select></label><label>New value <input id="editVal" placeholder="Exact replacement"></label><button id="applyEdit" disabled>Preview and apply</button></div><div id="editPreview" class="muted"></div>
+</section>
+<section class="panel">
+<h2>6. Export</h2><div class="row"><button id="exportCsv" disabled>Export cleaned CSV</button><button id="exportLog" disabled>Export change log</button></div><p class="muted">Exports the current working data; the original upload is preserved in memory until you reset or close this page.</p>
+</section>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+let original=[],rows=[],headers=[],changes=[],filename='data.csv',numericCols=[];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function parseCSV(text){
+ const out=[];let row=[],cell='',q=false;
+ for(let i=0;i<text.length;i++){const c=text[i];
+  if(q){if(c==='"'&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')q=false;else cell+=c}
+  else if(c==='"')q=true;else if(c===','){row.push(cell);cell=''}
+  else if(c==='\n'){row.push(cell.replace(/\r$/,''));out.push(row);row=[];cell=''}
+  else cell+=c;
+ }
+ if(cell.length||row.length){row.push(cell.replace(/\r$/,''));out.push(row)}
+ while(out.length&&out[out.length-1].every(v=>v===''))out.pop();
+ if(!out.length)return {headers:[],rows:[]};
+ const hs=out.shift().map((h,i)=>h.trim()||`Column ${i+1}`);
+ return {headers:hs,rows:out.map(r=>hs.map((_,i)=>r[i]??''))};
+}
+function csvCell(v){v=String(v??'');return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function download(name,text,type='text/csv;charset=utf-8'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function setLoaded(){['search','filterCol','filterVal','sortCol','sortDir','clearFilter','scan','dedupe','fill','numCol','calc','editCol','applyEdit','exportCsv','exportLog','logExport','reset'].forEach(id=>$(id).disabled=false);populateSelects();renderTable();scanQuality();calculate()}
+function populateSelects(){for(const id of ['filterCol','sortCol','numCol','editCol']){const el=$(id);el.innerHTML=(id==='filterCol'||id==='sortCol')?'<option value="">'+(id==='filterCol'?'Filter column…':'Sort column…')+'</option>':'';headers.forEach((h,i)=>{const o=document.createElement('option');o.value=i;o.textContent=h;el.append(o)})}detectNumeric()}
+function detectNumeric(){numericCols=headers.map((h,i)=>i).filter(i=>{const vals=rows.map(r=>r[i]).filter(v=>v.trim()!=='');return vals.length&&vals.every(v=>Number.isFinite(Number(v)))});const el=$('numCol');el.innerHTML='';numericCols.forEach(i=>{const o=document.createElement('option');o.value=i;o.textContent=headers[i];el.append(o)});$('calc').disabled=!numericCols.length}
+function current(){let a=rows.map((r,i)=>({r,i}));const q=$('search').value.toLowerCase(),fc=$('filterCol').value,fv=$('filterVal').value.toLowerCase(),sc=$('sortCol').value,dir=$('sortDir').value;
+ a=a.filter(({r})=>(!q||r.some(v=>v.toLowerCase().includes(q)))&&(!fc||!fv||r[+fc].toLowerCase().includes(fv)));
+ if(sc!==''){const c=+sc;a.sort((x,y)=>{const a=x.r[c],b=y.r[c],na=Number(a),nb=Number(b);let cmp=a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'});if(a.trim()!==''&&b.trim()!==''&&Number.isFinite(na)&&Number.isFinite(nb))cmp=na-nb;return dir==='asc'?cmp:-cmp})}
+ return a}
+function renderTable(){if(!headers.length)return;const a=current();$('table').innerHTML='<table><thead><tr>'+headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>'+a.slice(0,500).map(({r})=>'<tr>'+r.map(v=>`<td>${esc(v)}</td>`).join('')+'</tr>').join('')+'</tbody></table>'; $('rowInfo').textContent=`Showing ${Math.min(a.length,500)} of ${a.length} matching records (${rows.length} total).`}
+function log(row,col,oldv,newv,method,reason){changes.push({row:row+1,column:headers[col],original:oldv,new:newv,method,reason})}
+function scanQuality(){if(!rows.length)return;const missing=[],invalid=[],ids=[],seen=new Map(),dups=[];headers.forEach((h,c)=>{rows.forEach((r,i)=>{if(!r[c].trim())missing.push(`${h}: row ${i+1}`)})});
+ numericCols.forEach(c=>rows.forEach((r,i)=>{if(r[c].trim()&&!Number.isFinite(Number(r[c])))invalid.push(`${headers[c]}: row ${i+1} = ${r[c]}`)}));
+ const idCols=headers.map((h,i)=>({h,i})).filter(x=>/^(id|.*_id|.* id)$/i.test(x.h.trim()));idCols.forEach(({h,i})=>{const m=new Map();rows.forEach((r,n)=>{const v=r[i].trim();if(!v)return;if(m.has(v))ids.push(`${h} "${v}" at rows ${m.get(v)+1} and ${n+1}`);else m.set(v,n)})});
+ rows.forEach((r,i)=>{const key=JSON.stringify(r);if(seen.has(key))dups.push(`Row ${i+1} duplicates row ${seen.get(key)+1}`);else seen.set(key,i)});
+ $('quality').innerHTML=`<p><b>Exact duplicate rows:</b> ${dups.length} &nbsp; <b>Blank cells:</b> ${missing.length} &nbsp; <b>Non-numeric values in detected numeric columns:</b> ${invalid.length} &nbsp; <b>Repeated ID values:</b> ${ids.length}</p>`+
+ (dups.length?`<details><summary>Duplicate rows</summary>${dups.map(esc).join('<br>')}</details>`:'')+
+ (missing.length?`<details><summary>Blank cells (first 100)</summary>${missing.slice(0,100).map(esc).join('<br>')}</details>`:'')+
+ (invalid.length?`<details><summary>Invalid numeric values</summary>${invalid.map(esc).join('<br>')}</details>`:'')+
+ (ids.length?`<details><summary>Repeated ID values</summary>${ids.map(esc).join('<br>')}</details>`:'')+
+ (!dups.length&&!missing.length&&!invalid.length&&!ids.length?'<p>No issues found by these checks.</p>':'');
+}
+function median(a){if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2}
+function quartiles(a){const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2),lo=s.slice(0,m+(s.length%2?1:0)),hi=s.slice(m);return [median(lo),median(hi)]}
+function calculate(){if(!numericCols.length){$('stats').innerHTML='No fully numeric columns detected.';return}const c=+$('numCol').value,vals=rows.map(r=>r[c].trim()===''?NaN:Number(r[c])).filter(Number.isFinite);if(!vals.length)return;
+ const sorted=[...vals].sort((a,b)=>a-b),sum=vals.reduce((a,b)=>a+b,0),mean=sum/vals.length,[q1,q3]=quartiles(vals),iqr=q3-q1,low=q1-1.5*iqr,high=q3+1.5*iqr,out=vals.filter(v=>v<low||v>high),clean=vals.filter(v=>v>=low&&v<=high);
+ const freq=new Map();vals.forEach(v=>freq.set(v,(freq.get(v)||0)+1));const maxf=Math.max(...freq.values()),modes=[...freq].filter(x=>x[1]===maxf).map(x=>x[0]);
+ const stat=(name,val)=>`<div class="stat"><span>${name}</span><b>${esc(val)}</b></div>`;
+ $('stats').innerHTML=stat('Count',vals.length)+stat('Total',sum)+stat('Mean',mean.toFixed(4))+stat('Median',median(vals))+stat('Mode',modes.length===vals.length?'No mode':modes.join(', '))+stat('Minimum',sorted[0])+stat('Maximum',sorted.at(-1))+stat('Range',sorted.at(-1)-sorted[0])+stat('Population SD',Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/vals.length).toFixed(4));
+ $('outliers').innerHTML=`<p><b>Inclusive quartiles:</b> Q1=${q1}, Q3=${q3}, IQR=${iqr}. <b>Fences:</b> ${low} to ${high}. <b>Outliers:</b> ${out.length}.</p><p>Same fences applied to both comparisons: all values (n=${vals.length}), then values inside fences (n=${clean.length}).</p><p>Mean: ${mean.toFixed(4)} → ${clean.length? (clean.reduce((a,b)=>a+b,0)/clean.length).toFixed(4):'—'}; median: ${median(vals)} → ${clean.length?median(clean):'—'}; population SD: ${Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/vals.length).toFixed(4)} → ${clean.length?Math.sqrt(clean.reduce((s,v)=>{const m=clean.reduce((a,b)=>a+b,0)/clean.length;return s+(v-m)**2},0)/clean.length).toFixed(4):'—'}.</p><p class="muted">Outlier flags are statistical signals, not automatic errors. Do not delete values solely because they fall outside the fences.</p>`;
+ drawHistogram(vals)}
+function drawHistogram(vals){const c=$('chart'),ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);if(!vals.length)return;const min=Math.min(...vals),max=Math.max(...vals),bins=Math.min(20,Math.max(5,Math.ceil(Math.sqrt(vals.length)))),span=max-min||1,counts=Array(bins).fill(0);vals.forEach(v=>counts[Math.min(bins-1,Math.floor((v-min)/span*bins))]++);const bw=(w-70)/bins,peak=Math.max(...counts);ctx.strokeStyle='#7a8795';ctx.beginPath();ctx.moveTo(45,15);ctx.lineTo(45,h-35);ctx.lineTo(w-10,h-35);ctx.stroke();counts.forEach((n,i)=>{const bh=(h-65)*n/peak;ctx.fillStyle='#3979bd';ctx.fillRect(48+i*bw,h-36-bh,bw-3,bh)});ctx.fillStyle='#354150';ctx.font='14px system-ui';ctx.fillText(String(min),45,h-10);ctx.fillText(String(max),w-45,h-10);ctx.fillText('Frequency',5,15)}
+$('file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;filename=f.name;const parsed=parseCSV(await f.text());headers=parsed.headers;rows=parsed.rows;original=rows.map(r=>[...r]);changes=[];$('metadata').textContent=`File: ${filename} · ${rows.length} data rows · ${headers.length} columns. Suggested types: `+headers.map((h,i)=>{const v=rows.map(r=>r[i]).filter(x=>x.trim());return `${h}: ${v.length&&v.every(x=>Number.isFinite(Number(x)))?'numeric':'text'}`}).join('; ');$('status').textContent='Loaded';setLoaded()});
+$('sample').onclick=()=>{const p=parseCSV('Record ID,Category,Amount,Notes\\nA01,Travel,120,Bus fare\\nA02,Food,35,Lunch\\nA03,Travel,120,Return trip\\nA03,Food,,Missing amount\\nA04,Office,999,Example high value\\nA04,Office,999,Example high value');headers=p.headers;rows=p.rows;original=rows.map(r=>[...r]);filename='demo.csv';changes=[];$('metadata').textContent='Demo data · 6 rows · suggested types: Record ID text, Category text, Amount numeric, Notes text';$('status').textContent='Demo loaded';setLoaded()};
+$('reset').onclick=()=>{rows=original.map(r=>[...r]);changes=[];populateSelects();renderTable();scanQuality();calculate();$('status').textContent='Reset to original'};
+['search','filterCol','filterVal','sortCol','sortDir'].forEach(id=>$(id).addEventListener('input',renderTable));$('clearFilter').onclick=()=>{$('search').value='';$('filterCol').value='';$('filterVal').value='';$('sortCol').value='';renderTable()};
+$('scan').onclick=scanQuality;
+$('dedupe').onclick=()=>{const seen=new Set();let removed=0;rows=rows.filter(r=>{const k=JSON.stringify(r);if(seen.has(k)){removed++;return false}seen.add(k);return true});if(removed)changes.push({row:'—',column:'(entire row)',original:`${removed} duplicate rows`,new:'Removed',method:'Automatic exact-row deduplication',reason:'Rows matched every field exactly; retained first occurrence.'});renderTable();scanQuality();calculate();$('status').textContent=`Removed ${removed} exact duplicates`};
+$('fill').onclick=()=>{let n=0;numericCols.forEach(c=>{const vals=rows.map(r=>r[c].trim()).filter(Boolean).map(Number).filter(Number.isFinite),m=median(vals);rows.forEach((r,i)=>{if(!r[c].trim()&&Number.isFinite(m)){log(i,c,'',String(m),'Automatic median imputation','Blank numeric cell; median of observed values in this column.');r[c]=String(m);n++}})});renderTable();scanQuality();calculate();$('status').textContent=`Filled ${n} cells`};
+$('numCol').onchange=calculate;$('calc').onclick=calculate;
+$('applyEdit').onclick=()=>{const r=+$('editRow').value-1,c=+$('editCol').value;if(!Number.isInteger(r)||r<0||r>=rows.length||!Number.isInteger(c)){$('editPreview').textContent='Choose a valid data row and column.';return}const old=rows[r][c],v=$('editVal').value;$('editPreview').textContent=`Preview: row ${r+1}, ${headers[c]}: "${old}" → "${v}". Applying records this edit in the change log.`;log(r,c,old,v,'Manual edit','User-entered replacement; verify against source documentation.');rows[r][c]=v;renderTable();scanQuality();detectNumeric();calculate()};
+function exportRows(){return [headers,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n')}
+function exportLog(){const hs=['row','column','original','new','method','reason'];return [hs,...changes.map(x=>hs.map(h=>x[h]??''))].map(r=>r.map(csvCell).join(',')).join('\r\n')}
+$('exportCsv').onclick=()=>download(filename.replace(/\.csv$/i,'')+'_cleaned.csv',exportRows());$('exportLog').onclick=$('logExport').onclick=()=>download(filename.replace(/\.csv$/i,'')+'_change_log.csv',exportLog());
+})();
+</script>
+</body></html>
