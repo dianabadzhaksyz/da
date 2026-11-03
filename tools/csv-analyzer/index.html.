@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Universal CSV Analysis Workbench</title>
+<style>
+:root{color-scheme:light;--ink:#1c2b35;--muted:#586873;--bg:#f3f6f8;--card:#fff;--line:#d9e1e6;--accent:#165f81;--soft:#e8f2f6}
+*{box-sizing:border-box}body{font:14px/1.5 system-ui,Arial,sans-serif;color:var(--ink);background:var(--bg);margin:0}header{background:#152d3a;color:#fff;padding:21px max(18px,calc((100vw - 1270px)/2))}header h1{font-size:24px;margin:0}header p{margin:5px 0 0;color:#d0dde5}.wrap{max-width:1310px;margin:24px auto;padding:0 18px}section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:17px}h2{font-size:17px;margin:0 0 12px}h3{font-size:14px;margin:10px 0 8px}.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.field{display:flex;flex-direction:column;gap:5px;min-width:125px}.field>label{font-weight:600;color:#3d5665}input,select,button,textarea{font:inherit} textarea{border:1px solid #b8c9d2;border-radius:6px;padding:8px;width:100%;min-height:75px} .wide{min-width:220px} .warning{color:#963c20} .preview{background:#fff8e6;border:1px solid #e0bd70;padding:12px;border-radius:6px;margin:10px 0} .scroll td{vertical-align:top} .tablebutton{padding:3px 8px} .bar-negative{background:#bf674c}input[type=file],input[type=text],input[type=number],select{border:1px solid #b8c9d2;border-radius:6px;padding:9px;max-width:100%;background:#fff}input[type=file]{max-width:310px}button{border-radius:6px;border:1px solid #a9becb;background:#fff;padding:9px 13px;cursor:pointer;color:var(--ink)}button.primary{background:var(--accent);color:white;border-color:var(--accent)}button:disabled{opacity:.45;cursor:not-allowed}button:hover:enabled{filter:brightness(.95)}.quiet{font-size:12px;color:var(--muted)}.status{padding:11px;background:var(--soft);border-radius:6px;margin-top:12px;white-space:pre-wrap}.error{background:#fcebec;color:#862e35}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.metric{padding:12px;border:1px solid var(--line);border-radius:8px}.metric strong{display:block;font-size:22px;font-variant-numeric:tabular-nums}.scroll{overflow:auto;max-height:460px;border:1px solid var(--line);border-radius:7px}table{border-collapse:collapse;width:100%;min-width:560px}th,td{text-align:left;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid #e3e9ec;padding:8px 10px;max-width:680px;overflow:visible;text-overflow:clip}th{background:#eef3f6;position:sticky;top:0;z-index:1}td{font-variant-numeric:tabular-nums}tbody tr:nth-child(even){background:#f9fbfc}.muted{color:var(--muted)}.two{display:grid;grid-template-columns:1fr 1fr;gap:17px}.hidden{display:none!important}.note{border-left:3px solid #7697aa;padding-left:10px;color:var(--muted)}.space{margin-top:12px}.chart{display:flex;flex-direction:column;gap:8px;margin-top:12px}.barrow{display:grid;grid-template-columns:minmax(115px,30%) 1fr 90px;align-items:center;gap:9px}.bartrack{height:15px;background:#edf2f5;border-radius:3px;overflow:hidden}.barfill{height:100%;background:#3481a5}.barlabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.right{text-align:right}.pagination{display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:10px}code{background:#f1f4f7;padding:1px 4px}@media(max-width:770px){.two{grid-template-columns:1fr}.barrow{grid-template-columns:minmax(85px,30%) 1fr 60px}}
+</style>
+</head>
+<body>
+<header><h1>Universal CSV Analysis Workbench</h1><p>Offline, reusable exploration and verification. Data stays in your browser.</p></header>
+<main class="wrap">
+<section>
+<h2>1. Open a dataset</h2>
+<div class="toolbar">
+<div class="field"><label for="file">CSV or TSV file</label><input id="file" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"></div>
+<div class="field"><label for="delimiter">Delimiter</label><select id="delimiter"><option value="auto">Auto-detect</option><option value=",">Comma</option><option value="\t">Tab</option><option value=";">Semicolon</option><option value="|">Pipe</option></select></div>
+<div class="field"><label for="blankMode">Blank values</label><select id="blankMode"><option value="trim">Empty or whitespace</option><option value="exact">Empty only</option></select></div>
+<button id="load" class="primary">Load file</button><button id="clear">Clear current dataset</button>
+</div>
+<div id="status" class="status" role="status">No data loaded. No file content is uploaded to a server.</div>
+</section>
+<div id="workspace" class="hidden">
+<section><h2>2. Dataset overview</h2><div id="metrics" class="grid"></div><p class="quiet">Column types are suggestions inferred from values, not corrections to source data. Duplicate and missing column names are renamed only in the interface.</p><div class="scroll"><table><thead><tr><th>Column</th><th>Suggested type</th><th>Present</th><th>Missing</th><th>Distinct</th><th>Examples (up to 3)</th></tr></thead><tbody id="profile"></tbody></table></div></section>
+<section><h2>3. Filter and sort records</h2>
+<div class="toolbar">
+<div class="field"><label for="filterCol">Filter column</label><select id="filterCol"></select></div>
+<div class="field"><label for="filterOp">Condition</label><select id="filterOp"><option value="contains">Contains</option><option value="eq">Equals</option><option value="neq">Not equal</option><option value="starts">Starts with</option><option value="empty">Is missing</option><option value="notempty">Is present</option><option value="gt">Number greater than</option><option value="lt">Number less than</option><option value="gte">Number at least</option><option value="lte">Number at most</option></select></div>
+<div class="field"><label for="filterVal">Value</label><input id="filterVal" type="text" placeholder="Enter a comparison value"></div>
+<div class="field"><label for="searchAll">Search across all columns</label><input id="searchAll" type="text" placeholder="Full-text search"></div><button id="searchButton">Search</button><button id="clearSearch">Clear search</button><button id="apply" class="primary">Apply filter</button><button id="removeFilter">Remove filter</button>
+<div class="field"><label for="sortCol">Sort column</label><select id="sortCol"></select></div>
+<div class="field"><label for="sortDir">Order</label><select id="sortDir"><option value="asc">Ascending</option><option value="desc">Descending</option></select></div>
+<button id="sort">Sort</button><button id="reset">Reset view</button>
+</div>
+<p id="viewStatus" class="quiet"></p><div class="scroll"><table><thead id="dataHead"></thead><tbody id="dataBody"></tbody></table></div>
+<p class="quiet">Long notes and descriptions are shown in full with wrapping; horizontally scroll to see all columns.</p><div class="pagination"><button id="prev">Previous</button><span id="page"></span><button id="next">Next</button></div>
+<div class="toolbar space"><button id="exportRows">Export displayed rows (CSV)</button><span class="quiet">Exports all filtered/sorted rows, not just the current page. Original cell values are preserved.</span></div>
+</section>
+<div class="two">
+<section><h2>4. Numeric column summary</h2><div class="toolbar"><div class="field"><label for="numCol">Numeric column</label><select id="numCol"></select></div><button id="numericGo">Calculate</button></div><div id="numericResult" class="space muted">Select a column to calculate descriptive statistics.</div><p class="quiet">Missing and nonnumeric cells are excluded and counted separately. Population SD divides by n. Quartiles use the inclusive percentile interpolation method (rank = 1 + (n − 1)p); outlier fences are calculated once from the full selected numeric set and held constant when recalculating without outliers.</p><div id="outlierDetail" class="space"></div></section>
+<section><h2>5. Grouped summaries</h2><div class="toolbar"><div class="field"><label for="groupCol">Group by</label><select id="groupCol"></select></div><div class="field"><label for="agg">Measure</label><select id="agg"><option value="count">Row count</option><option value="sum">Sum</option><option value="mean">Mean</option><option value="min">Minimum</option><option value="max">Maximum</option><option value="distinct">Distinct count</option></select></div><div class="field"><label for="measureCol">Measure column</label><select id="measureCol"></select></div><button id="groupGo" class="primary">Calculate</button></div><p class="quiet">Groups are based on currently filtered rows. For numeric measures, missing/nonnumeric values are excluded. Counts include all filtered rows.</p><div id="groupResult" class="space muted">Select grouping options.</div><div id="chart" class="chart"></div><button id="exportGroups" class="hidden space">Export grouped results (CSV)</button></section>
+</div>
+<section><h2>6. Data quality and auditable cleaning</h2>
+<p class="note">All checks and edits operate on a working copy. The source snapshot is immutable. Duplicate rules and ID interpretation are configurable because identical IDs are not automatically erroneous in every dataset.</p>
+<div class="toolbar">
+<div class="field"><label for="idCol">Identifier column</label><select id="idCol"><option value="">Not selected</option></select></div>
+<div class="field"><label for="duplicateCols">Exact duplicate columns</label><select id="duplicateCols"><option value="all">All columns (exact rows)</option><option value="id">Identifier column only</option></select></div>
+<div class="field"><label for="validationCol">Validate column as</label><select id="validationCol"></select></div>
+<div class="field"><label for="validationType">Expected type</label><select id="validationType"><option value="any">No type rule</option><option value="number">Finite number</option><option value="integer">Integer</option><option value="date">ISO date (YYYY-MM-DD)</option><option value="nonblank">Required/nonblank</option></select></div>
+<button id="qualityGo" class="primary">Check quality</button>
+</div>
+<div id="qualityResults" class="space muted">Select validation settings and run checks.</div>
+<h3>Manual cell edit</h3>
+<div class="toolbar"><div class="field"><label for="editRow">Source data row number (first data row = 1)</label><input id="editRow" type="number" min="1" placeholder="e.g. 1"></div><div class="field"><label for="editCol">Column</label><select id="editCol"></select></div><button id="inspectCell">Inspect cell</button></div>
+<div id="cellBefore" class="quiet space"></div>
+<div class="field"><label for="editValue">Replacement value (multiline supported)</label><textarea id="editValue"></textarea></div>
+<div class="field"><label for="editReason">Reason / evidence for edit</label><input id="editReason" type="text" class="wide" placeholder="Required to apply an edit"></div>
+<button id="previewEdit">Preview manual edit</button>
+<h3>Automatic correction rules (with preview)</h3>
+<div class="toolbar"><div class="field"><label for="ruleCol">Column</label><select id="ruleCol"></select></div><div class="field"><label for="ruleType">Rule</label><select id="ruleType"><option value="trim">Trim surrounding spaces</option><option value="empty">Replace blank values</option><option value="replace">Replace exact matching value</option><option value="upper">Uppercase text</option><option value="lower">Lowercase text</option></select></div><div class="field"><label for="ruleFind">Match (exact value)</label><input id="ruleFind" type="text"></div><div class="field"><label for="ruleReplace">Replacement</label><input id="ruleReplace" type="text"></div><div class="field"><label for="ruleReason">Reason / evidence</label><input id="ruleReason" type="text"></div><button id="previewRule">Preview rule</button></div>
+<h3>Duplicate records</h3>
+<div class="toolbar"><button id="previewDedupe">Preview exact duplicate removal</button><button id="undo" disabled>Undo last cleaning step</button><button id="resetClean">Reset working copy to original</button></div>
+<div id="pending" class="space"></div>
+<h3>Cleaning exports</h3>
+<div class="toolbar"><button id="exportClean" class="primary">Export cleaned CSV (unique records)</button><button id="exportChanges">Export cell-level change log (CSV)</button><button id="exportOriginal">Export original import snapshot (CSV)</button></div>
+<p class="quiet">Cleaned CSV export removes exact duplicates under the selected duplicate-key policy; choose all columns for strictly identical records. Removal is explicitly recorded. Empty cells are not guessed or replaced automatically. Every correction requires a documented reason.</p>
+</section>
+<section><h2>7. Activity log and independent checks</h2><p class="note">The imported data is read-only. This log records operations performed during this browser session. It is not a source-data correction log.</p><div id="log" class="scroll" style="max-height:210px;padding:10px"></div><div class="toolbar space"><button id="exportLog">Export activity log (JSON)</button></div><p class="quiet">Verification: compare source and loaded row counts; check that group row-count totals equal the filtered row count; calculate a small independent sample by hand or in a spreadsheet; re-open exported CSV and compare headers and values. Be cautious opening untrusted CSV exports in spreadsheet software because source values may contain formulas.</p></section>
+</div>
+</main>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+const cleaning={original:[],originalHeaders:[],changes:[],undo:[],pending:null,search:'',deleted:new Set(),qualityRules:new Map()};
+const state={name:'',columns:[],rows:[],indices:[],profiles:[],page:0,perPage:100,filters:[],sort:null,groups:[],log:[]};
+const safe=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function isBlank(v){return el('blankMode').value==='exact'?v==='':String(v).trim()==='';}
+function parseCSV(text,delimiter){
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[];let record=[],field='',quoted=false,afterQuote=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(quoted){if(ch==='"'){if(text[i+1]==='"'){field+='"';i++;}else{quoted=false;afterQuote=true;}}else{field+=ch;}continue;}
+    if(ch==='"' && field===''&&!afterQuote){quoted=true;continue;}
+    if(ch===delimiter){record.push(field);field='';afterQuote=false;continue;}
+    if(ch==='\r'||ch==='\n'){record.push(field);rows.push(record);record=[];field='';afterQuote=false;if(ch==='\r'&&text[i+1]==='\n')i++;continue;}
+    field+=ch;afterQuote=false;
+  }
+  if(quoted)throw Error('Unclosed quoted field. Check the file delimiter or quoting.');
+  if(field!==''||record.length){record.push(field);rows.push(record);}
+  return rows;
+}
+function detectDelimiter(text){
+  const candidates=[',','\t',';','|'];let best=',',bestScore=-Infinity;
+  for(const d of candidates){try{const preview=parseCSV(text.slice(0,Math.min(text.length,100000)),d).slice(0,20).filter(r=>r.some(v=>v!==''));
+    if(!preview.length)continue;let widths=preview.map(x=>x.length).filter(x=>x>1);if(!widths.length)continue;
+    const counts=new Map();widths.forEach(x=>counts.set(x,(counts.get(x)||0)+1));const common=Math.max(...counts.values());
+    const score=common*100+Math.min(50,Math.max(...widths))*2-(preview.length-common)*40;if(score>bestScore){bestScore=score;best=d;}
+  }catch(_){}}
+  return best;
+}
+function numberValue(v){const s=String(v).trim();if(!s)return null;const n=Number(s);return Number.isFinite(n)?n:null;}
+function inferredType(values){const present=values.filter(x=>!isBlank(x));if(!present.length)return 'empty';
+  const numerics=present.filter(x=>numberValue(x)!==null).length;
+  if(numerics===present.length)return 'numeric';
+  if(numerics/present.length>=0.9)return 'mostly numeric';
+  const iso=/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/;
+  if(present.filter(x=>iso.test(x.trim())&&!Number.isNaN(Date.parse(x.trim()))).length/present.length>=0.9)return 'date-like';
+  return 'text';
+}
+function addLog(operation,details){state.log.push({timestamp:new Date().toISOString(),operation,details});renderLog();}
+function renderLog(){el('log').innerHTML=state.log.map((x,i)=>`<div>${i+1}. <code>${safe(x.timestamp)}</code> <b>${safe(x.operation)}</b>: ${safe(x.details)}</div>`).join('')||'No operations yet.';}
+function options(id,columns){el(id).innerHTML=columns.map((col,i)=>`<option value="${i}">${safe(col)}</option>`).join('');}
+function profile(){state.profiles=state.columns.map((name,j)=>{const values=state.rows.map(r=>r[j]);const present=values.filter(v=>!isBlank(v));return {name,type:inferredType(values),present:present.length,missing:values.length-present.length,distinct:new Set(present).size,examples:[...new Set(present)].slice(0,3)};});
+ el('metrics').innerHTML=[['Source rows',state.rows.length],['Columns',state.columns.length],['Current visible rows',state.indices.length],['Missing cells',state.profiles.reduce((a,p)=>a+p.missing,0)]].map(([k,v])=>`<div class="metric"><span>${safe(k)}</span><strong>${v.toLocaleString()}</strong></div>`).join('');
+ el('profile').innerHTML=state.profiles.map(p=>`<tr><td>${safe(p.name)}</td><td>${safe(p.type)}</td><td>${p.present}</td><td>${p.missing}</td><td>${p.distinct}</td><td title="${safe(p.examples.join(' | '))}">${safe(p.examples.join(' | '))}</td></tr>`).join('');
+}
+function loadText(text,name){
+ const chosen=el('delimiter').value;const delim=chosen==='auto'?detectDelimiter(text):chosen==='\\t'?'\t':chosen;
+ const parsed=parseCSV(text,delim);if(!parsed.length||!parsed[0].length)throw Error('No header row found.');
+ const raw=parsed[0];const seen=new Map();const columns=raw.map((v,i)=>{let base=v.trim()||`Unnamed column ${i+1}`;let count=(seen.get(base)||0)+1;seen.set(base,count);return count===1?base:`${base} (${count})`;});
+ let rows=parsed.slice(1);if(rows.length&&rows[rows.length-1].length===1&&rows[rows.length-1][0]==='')rows.pop();
+ const extra=rows.filter(r=>r.length>columns.length).length;
+ if(extra)throw Error(`${extra} row(s) contain more fields than the header. Import cancelled to prevent silent data loss. Correct the source or delimiter first.`);
+ rows=rows.map(r=>columns.map((_,j)=>r[j]??''));
+ cleaning.original=rows.map(r=>r.slice());cleaning.originalHeaders=raw.slice();cleaning.changes=[];cleaning.undo=[];cleaning.pending=null;cleaning.search='';cleaning.deleted=new Set();cleaning.qualityRules=new Map();
+ state.name=name;state.columns=columns;state.rows=rows;state.indices=rows.map((_,i)=>i);state.filters=[];state.sort=null;state.groups=[];state.page=0;state.log=[];
+ for(const id of ['filterCol','sortCol','numCol','groupCol','measureCol','validationCol','editCol','ruleCol'])options(id,columns); el('idCol').innerHTML='<option value="">Not selected</option>'+columns.map((c,i)=>`<option value="${i}">${safe(c)}</option>`).join(''); el('searchAll').value='';el('pending').replaceChildren();el('qualityResults').textContent='Select validation settings and run checks.';el('outlierDetail').replaceChildren();el('undo').disabled=true;
+ el('workspace').classList.remove('hidden');el('groupResult').textContent='Select grouping options.';el('numericResult').textContent='Select a column to calculate descriptive statistics.';el('chart').replaceChildren();el('exportGroups').classList.add('hidden');
+ const mode=delim==='\t'?'Tab':delim===';'?'Semicolon':delim==='|'?'Pipe':'Comma';
+ el('status').className='status';el('status').textContent=`Loaded ${name}: ${rows.length.toLocaleString()} data rows, ${columns.length} columns. Delimiter: ${mode}.`+(extra?` Warning: ${extra} row(s) have more fields than the header; extra fields were not imported.`:'');
+ addLog('File loaded',`${name}; ${rows.length} rows; ${columns.length} columns; delimiter ${mode}; ${extra} rows had extra fields`);profile();renderRows();
+}
+function filterMatches(v,op,target){const s=String(v);const t=target.toLowerCase();switch(op){case 'empty':return isBlank(s);case 'notempty':return !isBlank(s);case 'contains':return s.toLowerCase().includes(t);case 'eq':return s.toLowerCase()===t;case 'neq':return s.toLowerCase()!==t;case 'starts':return s.toLowerCase().startsWith(t);default:{const a=numberValue(s),b=numberValue(target);if(a===null||b===null)return false;return op==='gt'?a>b:op==='lt'?a<b:op==='gte'?a>=b:a<=b;}}}
+function rebuild(){let ids=state.rows.map((_,i)=>i).filter(i=>!cleaning.deleted.has(i));for(const f of state.filters)ids=ids.filter(i=>filterMatches(state.rows[i][f.col],f.op,f.val));
+ if(cleaning.search)ids=ids.filter(i=>state.rows[i].some(v=>String(v).toLowerCase().includes(cleaning.search)));
+ if(state.sort){const {col,dir}=state.sort;const sign=dir==='desc'?-1:1;ids.sort((a,b)=>{let va=state.rows[a][col],vb=state.rows[b][col];let na=numberValue(va),nb=numberValue(vb);if(na!==null&&nb!==null)return (na-nb)*sign;return va.localeCompare(vb,undefined,{numeric:true,sensitivity:'base'})*sign||a-b;});}
+ state.indices=ids;state.page=0;profile();renderRows();el('groupResult').textContent='Group results are now out of date. Recalculate to update.';el('chart').replaceChildren();el('exportGroups').classList.add('hidden');state.groups=[];
+}
+function renderRows(){const n=state.indices.length;const pages=Math.max(1,Math.ceil(n/state.perPage));state.page=Math.min(state.page,pages-1);
+ el('viewStatus').textContent=`${n.toLocaleString()} / ${state.rows.length.toLocaleString()} rows; ${state.filters.length} active filter(s)`+(state.sort?`; sorted by ${state.columns[state.sort.col]} (${state.sort.dir})`:'.');
+ el('dataHead').innerHTML='<tr><th>Source row</th>'+state.columns.map(x=>`<th title="${safe(x)}">${safe(x)}</th>`).join('')+'</tr>';
+ el('dataBody').innerHTML=state.indices.slice(state.page*state.perPage,(state.page+1)*state.perPage).map(i=>'<tr><td>'+ (i+2)+'</td>'+state.rows[i].map(v=>`<td title="${safe(v)}">${safe(v)}</td>`).join('')+'</tr>').join('');
+ el('page').textContent=`Page ${state.page+1} of ${pages}`;el('prev').disabled=state.page===0;el('next').disabled=state.page>=pages-1;
+}
+function fmt(v){return Number.isFinite(v)?Number(v.toPrecision(12)).toLocaleString('en-US',{maximumFractionDigits:10}):'N/A';}
+function numericSummary(){if(!state.rows.length)return;const c=Number(el('numCol').value),values=state.indices.map(i=>numberValue(state.rows[i][c])).filter(x=>x!==null).sort((a,b)=>a-b);if(!values.length){el('numericResult').textContent='No numeric values in the filtered rows for this column.';return;}
+ const n=values.length,sum=values.reduce((a,b)=>a+b,0),mean=sum/n,median=n%2?values[(n-1)/2]:(values[n/2-1]+values[n/2])/2;
+
+ const entries=extendedStatistics(values,state.indices.length);
+ el('numericResult').innerHTML='<div class="grid">'+entries.map(([a,b])=>`<div class="metric"><span>${safe(a)}</span><strong style="font-size:18px">${safe(b)}</strong></div>`).join('')+'</div>';
+ renderOutliers(values,state.columns[c]);addLog('Numeric summary',`${state.columns[c]}; ${n} numeric observations from ${state.indices.length} filtered rows`);
+}
+function grouped(){if(!state.rows.length)return;const c=Number(el('groupCol').value),m=Number(el('measureCol').value),agg=el('agg').value;const groups=new Map();
+ for(const i of state.indices){const key=state.rows[i][c];if(!groups.has(key))groups.set(key,{label:key,count:0,numeric:[],all:new Set()});const g=groups.get(key);g.count++;g.all.add(state.rows[i][m]);const v=numberValue(state.rows[i][m]);if(v!==null)g.numeric.push(v);}
+ let result=[...groups.values()].map(g=>{const vals=g.numeric;let v;if(agg==='count')v=g.count;else if(agg==='distinct')v=g.all.size;else if(!vals.length)v=null;else if(agg==='sum')v=vals.reduce((a,b)=>a+b,0);else if(agg==='mean')v=vals.reduce((a,b)=>a+b,0)/vals.length;else if(agg==='min')v=Math.min(...vals);else v=Math.max(...vals);return {label:g.label,value:v,rows:g.count,valid:vals.length};});
+ result.sort((a,b)=>(b.value??-Infinity)-(a.value??-Infinity)||a.label.localeCompare(b.label));state.groups=result;
+ let s=`<div class="scroll" style="max-height:320px"><table><thead><tr><th>${safe(state.columns[c])}</th><th>${safe(agg)}</th><th>Rows</th><th>Numeric observations</th></tr></thead><tbody>`;
+ s+=result.map(g=>`<tr><td>${safe(g.label||'(empty)')}</td><td>${g.value===null?'N/A':fmt(g.value)}</td><td>${g.rows}</td><td>${g.valid}</td></tr>`).join('')+'</tbody></table></div>';
+ el('groupResult').innerHTML=`<p class="quiet">${result.length} groups; ${state.indices.length} filtered rows</p>`+s;
+ const nonnegative=result.filter(g=>g.value!==null&&g.value>=0).slice(0,15),max=Math.max(0,...nonnegative.map(g=>g.value));
+ el('chart').innerHTML=(result.some(g=>g.value!==null&&g.value<0)?'<p class="quiet">Bar preview shows up to 15 nonnegative group values; negative values remain in the table.</p>':'')+nonnegative.map(g=>`<div class="barrow"><span class="barlabel" title="${safe(g.label)}">${safe(g.label||'(empty)')}</span><div class="bartrack"><div class="barfill" style="width:${max?100*g.value/max:0}%"></div></div><span class="right">${fmt(g.value)}</span></div>`).join('');
+ el('exportGroups').classList.remove('hidden');addLog('Grouped summary',`Group ${state.columns[c]}; ${agg} of ${state.columns[m]}; ${result.length} groups; ${state.indices.length} rows`);
+}
+function csvCell(s){s=String(s??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function download(data,name,mime){const blob=new Blob([data],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function fileBase(){return(state.name.replace(/\.[^.]*$/,'').replace(/[^a-z0-9_-]+/gi,'_')||'dataset').slice(0,80);}
+el('load').addEventListener('click',async()=>{const f=el('file').files[0];if(!f){el('status').textContent='Choose a file first.';return;}try{const text=await f.text();loadText(text,f.name);}catch(err){el('status').className='status error';el('status').textContent='Could not load file: '+err.message;}});
+el('clear').onclick=()=>{cleaning.original=[];cleaning.changes=[];cleaning.undo=[];cleaning.pending=null;cleaning.search='';cleaning.deleted=new Set();Object.assign(state,{name:'',columns:[],rows:[],indices:[],profiles:[],page:0,filters:[],sort:null,groups:[],log:[]});el('workspace').classList.add('hidden');el('file').value='';el('status').className='status';el('status').textContent='Dataset cleared from the workbench.';};
+el('blankMode').onchange=()=>{if(state.columns.length){rebuild();addLog('Blank definition changed',el('blankMode').selectedOptions[0].textContent);}};
+el('apply').onclick=()=>{if(!state.columns.length)return;let col=Number(el('filterCol').value),op=el('filterOp').value,val=el('filterVal').value;if(['gt','lt','gte','lte'].includes(op)&&numberValue(val)===null){el('status').className='status error';el('status').textContent='Numeric filters require a valid number.';return;}state.filters.push({col,op,val});rebuild();addLog('Filter applied',`${state.columns[col]} ${op} ${val}; ${state.indices.length} rows remain`);el('status').className='status';};
+el('removeFilter').onclick=()=>{if(state.filters.length)state.filters.pop();rebuild();addLog('Last filter removed',`${state.filters.length} filter(s) remain`);};
+el('sort').onclick=()=>{if(!state.columns.length)return;state.sort={col:Number(el('sortCol').value),dir:el('sortDir').value};rebuild();addLog('Sort',`${state.columns[state.sort.col]} ${state.sort.dir}`);};
+el('reset').onclick=()=>{state.filters=[];state.sort=null;rebuild();addLog('Reset view','All filters and sorting cleared');};
+el('prev').onclick=()=>{state.page--;renderRows();};el('next').onclick=()=>{state.page++;renderRows();};
+el('numericGo').onclick=numericSummary;el('groupGo').onclick=grouped;
+el('agg').onchange=()=>{el('measureCol').disabled=el('agg').value==='count';};el('agg').onchange();
+el('exportRows').onclick=()=>{if(!state.columns.length)return;const lines=[state.columns,...state.indices.map(i=>state.rows[i])].map(r=>r.map(csvCell).join(','));download('\uFEFF'+lines.join('\r\n'),fileBase()+'_filtered.csv','text/csv;charset=utf-8');addLog('CSV export',`${state.indices.length} filtered/sorted rows`);};
+el('exportGroups').onclick=()=>{const lines=[['group','value','rows','numeric_observations'],...state.groups.map(g=>[g.label,g.value??'',g.rows,g.valid])];download('\uFEFF'+lines.map(r=>r.map(csvCell).join(',')).join('\r\n'),fileBase()+'_groups.csv','text/csv;charset=utf-8');addLog('Grouped CSV export',`${state.groups.length} groups`);};
+el('exportLog').onclick=()=>{download(JSON.stringify({filename:state.name,exportedAt:new Date().toISOString(),operations:state.log},null,2),fileBase()+'_analysis_log.json','application/json');};
+
+// Extended descriptive statistics. Percentile inclusive linear interpolation, in the style of PERCENTILE.INC.
+function incPercentile(sorted,p){if(!sorted.length)return null;const rank=(sorted.length-1)*p;const lo=Math.floor(rank),hi=Math.ceil(rank);return sorted[lo]+(sorted[hi]-sorted[lo])*(rank-lo);}
+function computeStats(sorted){if(!sorted.length)return null;const n=sorted.length,sum=sorted.reduce((a,b)=>a+b,0),mean=sum/n;
+ const freq=new Map();sorted.forEach(v=>freq.set(v,(freq.get(v)||0)+1));const maxFreq=Math.max(...freq.values());
+ const modes=maxFreq<=1?[]:[...freq].filter(([,count])=>count===maxFreq).map(([v])=>v);
+ return {n,sum,mean,median:incPercentile(sorted,.5),modes,min:sorted[0],max:sorted[n-1],range:sorted[n-1]-sorted[0],sd:Math.sqrt(sorted.reduce((a,v)=>a+(v-mean)**2,0)/n)};
+}
+function extendedStatistics(values,total){const z=computeStats(values);return [['Numeric observations',z.n],['Missing / invalid',total-z.n],['Total',fmt(z.sum)],['Mean',fmt(z.mean)],['Median',fmt(z.median)],['Mode',z.modes.length?z.modes.map(fmt).join(', '):'No mode (all values unique)'],['Minimum',fmt(z.min)],['Maximum',fmt(z.max)],['Range',fmt(z.range)],['Population SD',fmt(z.sd)]];}
+function summaryTable(title,stat){return `<div><b>${safe(title)}</b><div class="grid">`+(stat?extendedStatisticsRows(stat).map(([k,v])=>`<div class="metric"><span>${safe(k)}</span><strong style="font-size:15px">${safe(v)}</strong></div>`).join(''):'<p>No numeric observations remain.</p>')+'</div></div>';}
+function extendedStatisticsRows(z){return [['Count',z.n],['Total',fmt(z.sum)],['Mean',fmt(z.mean)],['Median',fmt(z.median)],['Mode',z.modes.length?z.modes.map(fmt).join(', '):'None'],['Minimum',fmt(z.min)],['Maximum',fmt(z.max)],['Range',fmt(z.range)],['Population SD',fmt(z.sd)]];}
+function renderOutliers(values,columnName){const q1=incPercentile(values,.25),q3=incPercentile(values,.75),iqr=q3-q1,lo=q1-1.5*iqr,hi=q3+1.5*iqr;
+ const inside=values.filter(v=>v>=lo&&v<=hi),out=values.filter(v=>v<lo||v>hi);
+ el('outlierDetail').innerHTML=`<h3>1.5 × IQR outlier comparison — ${safe(columnName)}</h3><p>Q1 = ${fmt(q1)}; Q3 = ${fmt(q3)}; IQR = ${fmt(iqr)}; fixed fences = [${fmt(lo)}, ${fmt(hi)}]. Values outside the fences are flagged, not automatically corrected or deleted. <b>${out.length}</b> of ${values.length} numeric observations are outside.</p><div class="two">${summaryTable('With outliers',computeStats(values))}${summaryTable('Without outliers (same fences)',computeStats(inside))}</div><p class="quiet">Outlier values (up to 100 displayed): ${safe(out.slice(0,100).map(fmt).join(', ')||'None')}${out.length>100?' …':''}</p><div class="chart" id="distributionChart"></div>`;
+ const counts=new Array(12).fill(0),min=values[0],max=values[values.length-1];for(const v of values){counts[max===min?0:Math.min(11,Math.floor(12*(v-min)/(max-min)))]++;}const peak=Math.max(...counts,1);
+ el('distributionChart').innerHTML='<h3>Numeric distribution (12 equal-width bins)</h3>'+counts.map((count,i)=>`<div class="barrow"><span class="barlabel">${safe(fmt(min+(max-min)*i/12))} – ${safe(fmt(min+(max-min)*(i+1)/12))}</span><div class="bartrack"><div class="barfill" style="width:${100*count/peak}%"></div></div><span>${count}</span></div>`).join('');
+}
+function rowFingerprint(row,mode){return JSON.stringify(mode==='id'&&el('idCol').value!==''?[row[Number(el('idCol').value)]]:row);}
+function duplicateGroups(){const seen=new Map(),groups=[];const mode=el('duplicateCols').value;
+ state.rows.forEach((r,i)=>{if(cleaning.deleted.has(i))return;const k=rowFingerprint(r,mode);if(!seen.has(k))seen.set(k,[i]);else seen.get(k).push(i);});
+ for(const r of seen.values())if(r.length>1)groups.push(r);return groups;}
+function validISO(s){if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const [y,m,d]=s.split('-').map(Number);const x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d;}
+function isInvalid(v,type){if(isBlank(v))return type==='nonblank';switch(type){case 'number':return numberValue(v)===null;case 'integer':return numberValue(v)===null||!Number.isInteger(numberValue(v));case 'date':return !validISO(v.trim());default:return false;}}
+function quality(){if(!state.rows.length)return;const col=+el('validationCol').value,type=el('validationType').value;cleaning.qualityRules.set(col,type);
+ const active=state.rows.map((r,i)=>({r,i})).filter(x=>!cleaning.deleted.has(x.i));const missing=state.columns.map((c,j)=>({column:c,count:active.filter(x=>isBlank(x.r[j])).length}));const invalid=active.map(x=>({i:x.i,v:x.r[col]})).filter(x=>isInvalid(x.v,type));const dup=duplicateGroups();
+ let conflicts=[],missingIds=[];if(el('idCol').value!==''){const ic=+el('idCol').value,ids=new Map();state.rows.forEach((r,i)=>{if(cleaning.deleted.has(i))return;const key=r[ic];if(isBlank(key))missingIds.push(i);else{if(!ids.has(key))ids.set(key,[]);ids.get(key).push(i);}});
+ conflicts=[...ids.entries()].filter(([,arr])=>arr.length>1 && new Set(arr.map(i=>JSON.stringify(state.rows[i]))).size>1).map(([id,arr])=>({id,rows:arr}));}
+ const missingTotal=missing.reduce((n,x)=>n+x.count,0);
+ el('qualityResults').innerHTML=`<div class="grid"><div class="metric">Missing cells<strong>${missingTotal}</strong></div><div class="metric">Duplicate groups (configured key)<strong>${dup.length}</strong></div><div class="metric">Extra duplicate records<strong>${dup.reduce((n,x)=>n+x.length-1,0)}</strong></div><div class="metric">Invalid values in validated column<strong>${invalid.length}</strong></div><div class="metric">Conflicting IDs (different records share ID)<strong>${conflicts.length}</strong></div><div class="metric">Blank IDs<strong>${missingIds.length}</strong></div></div><p class="quiet">Duplicate policy: ${safe(el('duplicateCols').value==='id'?'same ID':'same entire row')}. Conflicting IDs are warnings, not proof of error. Missing values in the validated column: ${missing[col].count}. Invalid excludes blanks unless “required/nonblank” is selected.</p><div class="scroll"><table><thead><tr><th>Column</th><th>Missing</th></tr></thead><tbody>${missing.map(m=>`<tr><td>${safe(m.column)}</td><td>${m.count}</td></tr>`).join('')}</tbody></table></div><p>Duplicate group source data row numbers (first 30 groups): ${safe(dup.slice(0,30).map(g=>g.map(i=>i+1).join('/')).join('; ')||'None')}</p><p>Conflicting IDs / row numbers (first 30): ${safe(conflicts.slice(0,30).map(g=>`${g.id}: ${g.rows.map(i=>i+1).join('/')}`).join('; ')||'None')}</p><p>Invalid source data row numbers (first 100): ${safe(invalid.slice(0,100).map(x=>x.i+1).join(', ')||'None')}</p>`;
+ addLog('Quality check',`missing cells ${missingTotal}; duplicate groups ${dup.length}; conflicting IDs ${conflicts.length}; validation failures ${invalid.length}`);
+}
+function snapshot(){cleaning.undo.push({rows:state.rows.map(r=>r.slice()),changes:cleaning.changes.map(x=>({...x}))});el('undo').disabled=false;}
+function staged(operations,method,reason){cleaning.pending={operations,method,reason};const shown=operations.slice(0,30);el('pending').innerHTML=`<div class="preview"><b>Preview only — no changes applied</b><p>${operations.length} cell edit(s) or record removal(s). Reason: ${safe(reason)}</p><div class="scroll"><table><thead><tr><th>Row</th><th>Column</th><th>Original/current value</th><th>Proposed value</th></tr></thead><tbody>${shown.map(x=>`<tr><td>${x.row+1}</td><td>${x.remove?'Entire record':safe(state.columns[x.col])}</td><td>${safe(x.remove?JSON.stringify(state.rows[x.row]):state.rows[x.row][x.col])}</td><td>${safe(x.remove?'REMOVE':x.newValue)}</td></tr>`).join('')}</tbody></table></div>${operations.length>30?'<p>Preview shows first 30 operations; all operations will apply.</p>':''}<div class="toolbar space"><button class="primary" id="confirmPending">Apply proposed changes</button><button id="cancelPending">Cancel</button></div></div>`;
+ el('confirmPending').onclick=applyPending;el('cancelPending').onclick=()=>{cleaning.pending=null;el('pending').replaceChildren();};}
+function applyPending(){const p=cleaning.pending;if(!p)return;snapshot();const now=new Date().toISOString();let removed=[];
+ for(const x of p.operations){if(x.remove){removed.push(x.row);cleaning.changes.push({timestamp:now,source_row:x.row+1,column:'[record]',original_value:JSON.stringify(cleaning.original[x.row]),previous_value:JSON.stringify(state.rows[x.row]),new_value:'[REMOVED]',method:p.method,reason:p.reason});}
+ else{const old=state.rows[x.row][x.col];if(old===x.newValue)continue;state.rows[x.row][x.col]=x.newValue;cleaning.changes.push({timestamp:now,source_row:x.row+1,column:state.columns[x.col],original_value:cleaning.original[x.row][x.col],previous_value:old,new_value:x.newValue,method:p.method,reason:p.reason});}}
+ // Retain array indices mapped to source row numbers. Removal via this workflow is handled by export, not destructive array splicing.
+ for(const i of removed)cleaning.deleted.add(i);
+ cleaning.pending=null;el('pending').replaceChildren();rebuild();el('outlierDetail').replaceChildren();el('numericResult').textContent='Cleaning changed the data; recalculate.';quality();addLog('Cleaning applied',`${p.method}: ${p.operations.length} changes; reason: ${p.reason}`);
+}
+function editIndex(){const n=Number(el('editRow').value);if(!Number.isInteger(n)||n<1||n>state.rows.length)throw Error('Select a valid source data row number (1 through '+state.rows.length+').');return n-1;}
+function showCell(){try{const i=editIndex(),j=+el('editCol').value;el('cellBefore').textContent=`Current value for source data row ${i+1}, ${state.columns[j]}: ${state.rows[i][j]}`;el('editValue').value=state.rows[i][j];}catch(err){el('cellBefore').textContent=err.message;}}
+function previewCell(){try{const i=editIndex(),j=+el('editCol').value,reason=el('editReason').value.trim();if(!reason)throw Error('A reason is required before an edit.');if(cleaning.deleted.has(i))throw Error('This row is currently marked removed. Undo the removal first.');if(state.rows[i][j]===el('editValue').value)throw Error('New value is identical to the current value.');staged([{row:i,col:j,newValue:el('editValue').value}],'Manual edit',reason);}catch(err){el('pending').textContent=err.message;}}
+function previewRule(){const j=+el('ruleCol').value,type=el('ruleType').value,reason=el('ruleReason').value.trim();if(!reason){el('pending').textContent='Reason / evidence is required.';return;}
+ const operations=[];state.rows.forEach((r,i)=>{if(cleaning.deleted.has(i))return;const old=r[j];let v=old;switch(type){case 'trim':v=old.trim();break;case 'empty':if(isBlank(old))v=el('ruleReplace').value;break;case 'replace':if(old===el('ruleFind').value)v=el('ruleReplace').value;break;case 'upper':v=old.toUpperCase();break;case 'lower':v=old.toLowerCase();break;}if(v!==old)operations.push({row:i,col:j,newValue:v});});
+ staged(operations,`Rule: ${type} (${state.columns[j]})`,reason);
+}
+function dedupeOps(){const groups=duplicateGroups(),keep=new Set();const operations=[];for(const g of groups){for(const i of g){if(cleaning.deleted.has(i))continue;if(!keep.has(JSON.stringify(rowFingerprint(state.rows[i],el('duplicateCols').value)))){keep.add(JSON.stringify(rowFingerprint(state.rows[i],el('duplicateCols').value)));continue;}operations.push({row:i,remove:true});}}return operations;}
+function activeRowsUnique(){const seen=new Set(),rows=[],removed=[];for(let i=0;i<state.rows.length;i++){if(cleaning.deleted.has(i))continue;const key=rowFingerprint(state.rows[i],el('duplicateCols').value);if(seen.has(key)){removed.push(i);continue;}seen.add(key);rows.push(state.rows[i]);}return {rows,removed};}
+function exportCSV(name,rows,headers=state.columns){download('\uFEFF'+[headers,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n'),fileBase()+name,'text/csv;charset=utf-8');}
+function cleanExport(){if(el('duplicateCols').value==='id'&&el('idCol').value===''){el('pending').textContent='Select an ID column before using identifier-based deduplication.';return;}
+ const result=activeRowsUnique();const now=new Date().toISOString();for(const i of result.removed){if(!cleaning.changes.some(c=>c.source_row===i+1&&c.column==='[record]'&&c.new_value==='[REMOVED]'))cleaning.changes.push({timestamp:now,source_row:i+1,column:'[record]',original_value:JSON.stringify(cleaning.original[i]),previous_value:JSON.stringify(state.rows[i]),new_value:'[REMOVED FROM CLEANED EXPORT]',method:'Export deduplication',reason:'Configured duplicate key: '+el('duplicateCols').value});}
+ exportCSV('_cleaned.csv',result.rows);addLog('Cleaned CSV exported',`${result.rows.length} records, ${result.removed.length} duplicates excluded at export`);
+}
+function changesExport(){const headers=['timestamp','source_row','column','original_value','previous_value','new_value','method','reason'];exportCSV('_change_log.csv',cleaning.changes.map(x=>headers.map(k=>x[k]??'')),headers);addLog('Change log exported',`${cleaning.changes.length} changes`);}
+function resetCleaning(){if(!state.rows.length)return;state.rows=cleaning.original.map(r=>r.slice());cleaning.changes=[];cleaning.undo=[];cleaning.deleted=new Set();cleaning.pending=null;el('undo').disabled=true;el('pending').replaceChildren();rebuild();addLog('Reset working copy','Restored original imported cell values');}
+function undoCleaning(){const s=cleaning.undo.pop();if(!s)return;state.rows=s.rows;cleaning.changes=s.changes;cleaning.deleted=new Set(cleaning.changes.filter(x=>x.column==='[record]'&&x.new_value==='[REMOVED]').map(x=>x.source_row-1));el('undo').disabled=!cleaning.undo.length;rebuild();addLog('Undo cleaning step','Restored previous working state');}
+el('qualityGo').onclick=quality;el('inspectCell').onclick=showCell;el('previewEdit').onclick=previewCell;el('previewRule').onclick=previewRule;
+el('previewDedupe').onclick=()=>{if(el('duplicateCols').value==='id'&&el('idCol').value===''){el('pending').textContent='Select an ID column.';return;}staged(dedupeOps(),'Duplicate removal','Configured duplicate key: '+el('duplicateCols').value);};
+el('undo').onclick=undoCleaning;el('resetClean').onclick=resetCleaning;
+el('exportClean').onclick=cleanExport;el('exportChanges').onclick=changesExport;el('exportOriginal').onclick=()=>exportCSV('_original_snapshot.csv',cleaning.original,cleaning.originalHeaders);
+el('searchButton').onclick=()=>{cleaning.search=el('searchAll').value.toLowerCase();rebuild();addLog('Full text search',cleaning.search);};
+el('clearSearch').onclick=()=>{cleaning.search='';el('searchAll').value='';rebuild();};
+
+</script>
+</body></html>
